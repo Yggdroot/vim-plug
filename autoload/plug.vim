@@ -883,7 +883,7 @@ function! s:update_impl(pull, force, args) abort
   normal! 2G
   silent! redraw
 
-  let s:clone_opt = get(g:, 'plug_shallow', 1) ?
+  let s:clone_opt = get(g:, 'plug_shallow', 0) ?
         \ '--depth 1' . (s:git_version_requirement(1, 7, 10) ? ' --no-single-branch' : '') : ''
 
   " Python version requirement (>= 2.7)
