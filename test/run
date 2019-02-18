@@ -1,25 +1,32 @@
 #!/bin/bash
 
-cd $(dirname "${BASH_SOURCE[0]}")
+# Privileged mode, ignores $CDPATH etc.
+set -p
+set -eu
+
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
 export BASE="$PWD"
-export PLUG_SRC="$PWD/../autoload/plug.vim"
+export PLUG_SRC="$PWD/../plug.vim"
 export PLUG_FIXTURES="$PWD/fixtures"
 mkdir -p "$PLUG_FIXTURES"
+export TEMP=/tmp/vim-plug-test
+rm -rf "$TEMP"
+mkdir -p "$TEMP"
 
-cat > /tmp/mini-vimrc << VIMRC
-set rtp+=/tmp/junegunn/vader.vim
+cat > $TEMP/mini-vimrc << VIMRC
+set rtp+=$TEMP/junegunn/vader.vim
 set shell=/bin/bash
 VIMRC
 
 clone() {
-  if [ ! -d $2 ]; then
-    git clone $1 $2
+  if [ ! -d "$2" ]; then
+    git clone "$1" "$2"
   fi
 }
 
 clone_repos() (
-  cd /tmp
+  cd $TEMP
   mkdir -p junegunn vim-scripts jg
   for repo in vader.vim goyo.vim rust.vim seoul256.vim vim-easy-align vim-fnr \
               vim-oblique vim-pseudocl vim-redis vim-emoji; do
@@ -27,6 +34,8 @@ clone_repos() (
   done
   clone https://github.com/vim-scripts/beauty256.git vim-scripts/beauty256 &
   clone https://github.com/junegunn/fzf.git fzf &
+  clone https://github.com/yous/subsubmodule.git yous/subsubmodule && \
+    (cd yous/subsubmodule && git submodule update --init --recursive &) &
   wait
 
   clone junegunn/vim-emoji jg/vim-emoji
@@ -39,8 +48,8 @@ make_dirs() (
   cd "$PLUG_FIXTURES/$1"
   mkdir -p autoload colors ftdetect ftplugin indent plugin syntax
   for d in *; do
-    [ -d $d ] || continue
-    cat > $d/xxx.vim << EOF
+    [ -d "$d" ] || continue
+    cat > "$d/xxx.vim" << EOF
     " echom expand('<sfile>')
     let g:total_order = get(g:, 'total_order', [])
     let g:$2 = get(g:, '$2', [])
@@ -68,30 +77,37 @@ DOC
 
   make_dirs yyy/ yyy
   make_dirs yyy/after yyy
+  mkdir -p "$PLUG_FIXTURES/yyy/rtp/doc"
+  cat > "$PLUG_FIXTURES/yyy/rtp/doc/yyy.txt" << DOC
+hello *yyy*
+DOC
   gitinit yyy
 
   make_dirs z1/ z1
   make_dirs z2/ z2
 
   rm -rf "$PLUG_FIXTURES/ftplugin-msg"
-  mkdir -p "$PLUG_FIXTURES/ftplugin-msg/ftplugin"
-  echo "echomsg 'ftplugin'" > "$PLUG_FIXTURES/ftplugin-msg/ftplugin/c.vim"
+  mkdir -p "$PLUG_FIXTURES"/ftplugin-msg/{plugin,ftplugin}
+  echo "echomsg 'ftplugin-c'" > "$PLUG_FIXTURES/ftplugin-msg/ftplugin/c.vim"
+  echo "echomsg 'ftplugin-java'" > "$PLUG_FIXTURES/ftplugin-msg/ftplugin/java.vim"
 
-  rm -rf /tmp/new-branch
-  cd /tmp
+  rm -rf $TEMP/new-branch
+  cd $TEMP
   git init new-branch
   cd new-branch
   mkdir plugin
   echo 'let g:foo = 1' > plugin/foo.vim
   git add plugin/foo.vim
   git commit -m initial
+  git checkout -b plugin
+  git checkout master
 
   cd "$BASE"
 }
 
 select_vim() {
   local vim=/usr/bin/vim
-  if [ -n "$DEPS" ] && [ -e "${DEPS}/bin/vim" ]; then
+  if [ -n "${DEPS:-}" ] && [ -e "${DEPS}/bin/vim" ]; then
     vim="${DEPS}/bin/vim"
   elif [ -e "/usr/local/bin/vim" ]; then
     vim=/usr/local/bin/vim
@@ -102,13 +118,13 @@ select_vim() {
 clone_repos
 prepare
 
-VIM=$(select_vim)
-echo "Selected Vim: $VIM"
-if [ "$1" = '!' ]; then
-  $VIM -Nu /tmp/mini-vimrc -c 'Vader! test.vader' > /dev/null &&
+git --version
+vim=$(select_vim)
+echo "Selected Vim: $vim"
+if [ "${1:-}" = '!' ]; then
+  $vim -Nu $TEMP/mini-vimrc -c 'Vader! test.vader' > /dev/null &&
   prepare &&
-  $VIM -Nu /tmp/mini-vimrc -c 'let g:plug_threads = 1 | Vader! test.vader' > /dev/null
+  $vim -Nu $TEMP/mini-vimrc -c 'let g:plug_threads = 1 | Vader! test.vader' > /dev/null
 else
-  $VIM -Nu /tmp/mini-vimrc -c 'Vader test.vader'
+  $vim -Nu $TEMP/mini-vimrc -c 'Vader test.vader'
 fi
-
